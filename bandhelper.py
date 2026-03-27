@@ -260,6 +260,146 @@ async def upload_recording(page, file_path: str, recording_name: str) -> bool:
     return True
 
 
+async def midi_preset_exists(page, preset_name: str) -> bool:
+    """
+    Check if a MIDI preset with this name already exists in the Add MIDI Presets modal.
+    Opens the modal, searches for the name, returns True if found.
+    """
+    await page.evaluate("""
+        () => {
+            const all = [...document.querySelectorAll('a')];
+            const found = all.find(a => a.textContent.trim() === 'Add MIDI Presets');
+            if (found) found.click();
+        }
+    """)
+    await page.wait_for_timeout(2000)
+
+    # Search for the preset name in the filter box
+    search = await page.evaluate("""
+        () => {
+            const vis = [...document.querySelectorAll('input[type=text]')]
+                .filter(el => el.offsetParent !== null);
+            const s = vis.find(el => el.placeholder && el.placeholder.toLowerCase().includes('search'));
+            return s ? s.id : null;
+        }
+    """)
+    if search:
+        await page.evaluate(f"document.getElementById('{search}').value = {repr(preset_name)}")
+        await page.evaluate(f"document.getElementById('{search}').dispatchEvent(new Event('input', {{bubbles:true}}))")
+        await page.wait_for_timeout(1000)
+
+    # Check if any visible checkbox label matches the preset name
+    exists = await page.evaluate(f"""
+        () => {{
+            const labels = [...document.querySelectorAll('label, span')]
+                .filter(el => el.offsetParent !== null);
+            return labels.some(el => el.textContent.trim() === {repr(preset_name)});
+        }}
+    """)
+
+    # Close modal by clicking Cancel
+    await page.evaluate("""
+        () => {
+            const all = [...document.querySelectorAll('a, button')]
+                .filter(el => el.offsetParent !== null);
+            const cancel = all.find(el => el.textContent.trim() === 'Cancel');
+            if (cancel) cancel.click();
+        }
+    """)
+    await page.wait_for_timeout(1000)
+    return bool(exists)
+
+
+async def add_midi_preset(page, preset_name: str) -> bool:
+    """
+    Create a new MIDI preset with just a name, shared with Ray only.
+    Uses 'New MIDI Preset' button inside the Add MIDI Presets modal.
+    All MIDI values left blank — user fills in GP values manually.
+    """
+    print(f"  Creating MIDI preset: {preset_name}")
+
+    # Open Add MIDI Presets modal
+    await page.evaluate("""
+        () => {
+            const all = [...document.querySelectorAll('a')];
+            const found = all.find(a => a.textContent.trim() === 'Add MIDI Presets');
+            if (found) found.click();
+        }
+    """)
+    await page.wait_for_timeout(2000)
+
+    # Click 'New MIDI Preset'
+    await page.evaluate("""
+        () => {
+            const all = [...document.querySelectorAll('a, button')]
+                .filter(el => el.offsetParent !== null);
+            const btn = all.find(el => el.textContent.trim() === 'New MIDI Preset');
+            if (btn) btn.click();
+        }
+    """)
+    await page.wait_for_timeout(2000)
+
+    # Fill in Name — first visible text input
+    name_id = await page.evaluate("""
+        () => {
+            const vis = [...document.querySelectorAll('input[type=text]')]
+                .filter(el => el.offsetParent !== null);
+            return vis.length > 0 ? vis[0].id : null;
+        }
+    """)
+    if not name_id:
+        print("  ERROR: Name field not found in New MIDI Preset form", file=sys.stderr)
+        return False
+
+    await page.evaluate(f"""
+        () => {{
+            const el = document.getElementById('{name_id}');
+            el.value = {repr(preset_name)};
+            el.dispatchEvent(new Event('input', {{bubbles:true}}));
+            el.dispatchEvent(new Event('change', {{bubbles:true}}));
+        }}
+    """)
+    await page.wait_for_timeout(300)
+
+    # Uncheck all users except Ray (same pattern as recordings)
+    await page.evaluate("""
+        () => {
+            const checks = [...document.querySelectorAll('input[type=checkbox]')]
+                .filter(el => el.offsetParent !== null);
+            checks.forEach(cb => {
+                const label = cb.closest('label') ||
+                              document.querySelector(`label[for='${cb.id}']`);
+                const text = label ? label.textContent.trim() : '';
+                const userKeywords = ['Ben','Buck','Don','Donna','Kyle','Sound','Ray'];
+                const isUser = userKeywords.some(k => text.startsWith(k));
+                if (isUser) {
+                    const shouldCheck = text.startsWith('Ray');
+                    if (cb.checked !== shouldCheck) cb.click();
+                }
+            });
+        }
+    """)
+    await page.wait_for_timeout(300)
+
+    # Click Save
+    saved = await page.evaluate("""
+        () => {
+            const all = [...document.querySelectorAll('a, button')]
+                .filter(el => el.offsetParent !== null);
+            const save = all.find(el => el.textContent.trim() === 'Save');
+            if (save) { save.click(); return true; }
+            return false;
+        }
+    """)
+    if not saved:
+        print("  ERROR: Save button not found", file=sys.stderr)
+        return False
+
+    await page.wait_for_timeout(3000)
+    print(f"  MIDI preset created: {preset_name}")
+    return True
+
+
 async def save_song(page) -> bool:
     """Submit the song edit form."""
     try:

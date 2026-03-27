@@ -196,9 +196,10 @@ def main():
     if not learning_mp3.exists() or not practice_mp3.exists():
         print("WARNING: Mixdown files not found — skipping BandHelper upload", file=sys.stderr)
     else:
-        from bandhelper import login, find_song, upload_recording
+        from bandhelper import login, find_song, upload_recording, midi_preset_exists, add_midi_preset, BH_EDIT_URL
         from config import BH_ACCOUNT, BH_USERNAME, BH_PASSWORD
         from playwright.async_api import async_playwright
+        import re
 
         async def run_upload():
             async with async_playwright() as pw:
@@ -212,15 +213,23 @@ def main():
                     await browser.close()
                     return
                 if "song_edit" not in song_url:
-                    import re
                     song_id = re.search(r'ID=([^&]+)', song_url)
                     if song_id:
-                        from bandhelper import BH_EDIT_URL
                         song_url = f"{BH_EDIT_URL}?ID={song_id.group(1)}"
                 await page.goto(song_url, wait_until="domcontentloaded")
                 await page.wait_for_timeout(3000)
+
+                # Upload recordings
                 await upload_recording(page, str(learning_mp3), f"{args.song} - Learning")
                 await upload_recording(page, str(practice_mp3), f"{args.song} - Practice")
+
+                # Create MIDI preset if one doesn't already exist for this song
+                print(f"  Checking for MIDI preset: {args.song}")
+                if not await midi_preset_exists(page, args.song):
+                    await add_midi_preset(page, args.song)
+                else:
+                    print(f"  MIDI preset already exists — skipping.")
+
                 await browser.close()
 
         asyncio.run(run_upload())
