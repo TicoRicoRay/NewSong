@@ -47,18 +47,31 @@ def parse_song_arg(args):
 
 def main():
     p = argparse.ArgumentParser(
-        description="Download KV stems + mixdowns",
-        epilog='Example: python stems.py "The Joker - Steve Miller Band"'
+        description="NewSong — Full new song setup in one command.",
+        epilog=(
+            'Examples:\n'
+            '  NewSong "China Grove - Doobie Brothers"\n'
+            '  NewSong "Faithfully - Journey" --key A\n'
+            '  NewSong "Black Velvet - Alannah Myles" --chords-only\n'
+            '  NewSong "Sledgehammer - Peter Gabriel" --skip-chords\n'
+            '  NewSong "The Joker - Steve Miller Band" --skip-download'
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    p.add_argument("freeform",        nargs="*", help="'Song Title - Artist Name' (alternative to --artist/--song)")
-    p.add_argument("--artist",        help="Artist name")
-    p.add_argument("--song",          help="Song title")
-    p.add_argument("--url",           help="Direct KV song URL (skips search)")
-    p.add_argument("--key",           help="Target key to transpose to (e.g. A, Bb, F#)")
-    p.add_argument("--skip-download", action="store_true", help="Skip KV download (use existing stems)")
-    p.add_argument("--skip-chords",   action="store_true", help="Skip UG chord fetch + BandHelper upload")
-    p.add_argument("--chords-only",   action="store_true", help="Fetch chords + upload to BandHelper only, skip stems/mixdowns")
+    p.add_argument("freeform",        nargs="*", help="Song title and artist: \"Song - Artist\"")
+    p.add_argument("--artist",        help="Artist name (alternative to free-form)")
+    p.add_argument("--song",          help="Song title (alternative to free-form)")
+    p.add_argument("--url",           help="Direct KV song page URL (skips search)")
+    p.add_argument("--key",           help="Transpose to this key (e.g. A, Bb, F#)")
+    p.add_argument("--skip-download", action="store_true", help="Skip KV download — use stems already in Dropbox")
+    p.add_argument("--skip-chords",   action="store_true", help="Skip UG chord fetch and BandHelper lyrics upload")
+    p.add_argument("--chords-only",   action="store_true", help="Chords + BandHelper lyrics only — skip stems and mixdowns")
     args = p.parse_args()
+
+    # Show help if no arguments given
+    if not args.freeform and not args.artist and not args.song:
+        p.print_help()
+        sys.exit(0)
 
     args.artist, args.song = parse_song_arg(args)
 
