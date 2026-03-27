@@ -102,22 +102,33 @@ def main():
     # Show stems with auto-classification
     print()
     print("Stems found:")
-    for name in stem_names:
+    col_width = max(len(n) for n in stem_names) + 2
+    for i, name in enumerate(stem_names, 1):
         role   = classify_stem(name)
-        marker = "  \U0001F3B9" if role == 'keys' else ""
-        print(f"  {name}{marker}")
+        marker = "\U0001F3B9" if role == 'keys' else ""
+        print(f"  {i:2}. {name:<{col_width}}{marker}")
 
     keys_detected = [name for name in stem_names if classify_stem(name) == 'keys']
+    key_nums      = [i+1 for i, n in enumerate(stem_names) if classify_stem(n) == 'keys']
     print()
     if keys_detected:
-        print(f"Keys detected: {keys_detected}")
+        print(f"Keys detected: {key_nums} ({', '.join(keys_detected)})")
     else:
         print("No keys stems detected.")
 
     # Ask upfront — only human interaction in the whole workflow
-    answer = input("Keys correct? Press Enter to confirm, or type stem names to override (comma-separated): ").strip()
+    answer = input("Keys correct? Press Enter to confirm, or enter track numbers to override (e.g. 3,5): ").strip()
     if answer:
-        confirmed_keys = [k.strip() for k in answer.split(",")]
+        # Accept either numbers or names
+        confirmed_keys = []
+        for token in answer.split(","):
+            token = token.strip()
+            if token.isdigit():
+                idx = int(token) - 1
+                if 0 <= idx < len(stem_names):
+                    confirmed_keys.append(stem_names[idx])
+            else:
+                confirmed_keys.append(token)
         print(f"  Using keys: {confirmed_keys}")
     else:
         confirmed_keys = keys_detected
