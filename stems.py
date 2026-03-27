@@ -57,6 +57,7 @@ def main():
     p.add_argument("--key",           help="Target key to transpose to (e.g. A, Bb, F#)")
     p.add_argument("--skip-download", action="store_true", help="Skip KV download (use existing stems)")
     p.add_argument("--skip-chords",   action="store_true", help="Skip UG chord fetch + BandHelper upload")
+    p.add_argument("--chords-only",   action="store_true", help="Fetch chords + upload to BandHelper only, skip stems/mixdowns")
     args = p.parse_args()
 
     args.artist, args.song = parse_song_arg(args)
@@ -96,6 +97,10 @@ def main():
             print(f"  Chords step failed ({e}) — continuing.", file=sys.stderr)
         print()
 
+    if args.chords_only:
+        print("Done — chords only.")
+        return
+
     # Step 1a: Show stems + ask about keys BEFORE any slow work
     if not args.skip_download:
         from kv_download import get_stem_list
@@ -119,6 +124,10 @@ def main():
         )]
         stem_names = [s.stem for s in existing]  # strip .mp3
         stem_info  = None
+
+    if not stem_names:
+        print("No stems found on disk. Run without --skip-download to fetch from KV.")
+        return
 
     # Show stems with auto-classification
     print()
