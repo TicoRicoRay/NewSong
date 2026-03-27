@@ -73,13 +73,11 @@ def main():
     print("=" * 55)
     print()
 
-    confirmed_keys = None  # will be set during upfront prompt
+    from mixdown import classify_stem
 
-    # Step 1: Get stem list upfront (login + search, no download yet)
+    # Step 1a: Show stems + ask about keys BEFORE any slow work
     if not args.skip_download:
-        from kv_download import get_stem_list, download_all_stems
-        from mixdown import classify_stem
-
+        from kv_download import get_stem_list
         print("Fetching stem list from Karaoke-Version...")
         stem_info = asyncio.run(get_stem_list(
             artist=args.artist,
@@ -90,36 +88,45 @@ def main():
         if not stem_info:
             print("ERROR: Could not fetch stem list.", file=sys.stderr)
             sys.exit(1)
+        stem_names = list(stem_info["track_names"].values())
+    else:
+        # --skip-download: read existing stems from disk
+        print(f"Skipping KV download — using existing files in {stems_dir}")
+        existing = sorted(Path(stems_dir).glob("*.mp3"))
+        existing = [s for s in existing if not any(
+            tag in s.name for tag in ["_learning", "_practice", "_mix"]
+        )]
+        stem_names = [s.stem for s in existing]  # strip .mp3
+        stem_info  = None
 
-        track_names = stem_info["track_names"]
+    # Show stems with auto-classification
+    print()
+    print("Stems found:")
+    for name in stem_names:
+        role   = classify_stem(name)
+        marker = "  [KEYS]" if role == 'keys' else ""
+        print(f"  {name}{marker}")
 
-        # Show stems with auto-classification
-        print()
-        print("Stems found:")
-        for i, name in track_names.items():
-            role = classify_stem(name)
-            marker = "  [KEYS]" if role == 'keys' else ""
-            print(f"  {name}{marker}")
+    keys_detected = [name for name in stem_names if classify_stem(name) == 'keys']
+    print()
+    if keys_detected:
+        print(f"Keys detected: {keys_detected}")
+    else:
+        print("No keys stems detected.")
 
-        keys_detected = [name for name in track_names.values() if classify_stem(name) == 'keys']
-        print()
-        if keys_detected:
-            print(f"Keys detected: {keys_detected}")
-        else:
-            print("No keys stems detected.")
+    # Ask upfront — only human interaction in the whole workflow
+    answer = input("Keys correct? Press Enter to confirm, or type stem names to override (comma-separated): ").strip()
+    if answer:
+        confirmed_keys = [k.strip() for k in answer.split(",")]
+        print(f"  Using keys: {confirmed_keys}")
+    else:
+        confirmed_keys = keys_detected
+        print("  Confirmed.")
+    print()
 
-        # Ask upfront — all human interaction before slow download
-        answer = input("Keys correct? Press Enter to confirm, or type stem names to override (comma-separated): ").strip()
-        if answer:
-            confirmed_keys = [k.strip() for k in answer.split(",")]
-            print(f"  Using keys: {confirmed_keys}")
-        else:
-            confirmed_keys = keys_detected
-            print("  Confirmed.")
-
-        print()
-
-        # Step 2: Download all stems (slow — no more prompts after this)
+    # Step 1b: Download stems (slow — runs unattended from here)
+    if not args.skip_download:
+        from kv_download import download_all_stems
         paths = asyncio.run(download_all_stems(
             artist=args.artist,
             song=args.song,
@@ -129,8 +136,6 @@ def main():
         if not paths:
             print("ERROR: No stems downloaded.", file=sys.stderr)
             sys.exit(1)
-    else:
-        print(f"Skipping KV download — using existing files in {stems_dir}")
 
     # Step 3: Dropbox sync happens automatically via desktop app
     print(f"\nStems saved to: {stems_dir}")
