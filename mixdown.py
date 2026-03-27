@@ -201,7 +201,7 @@ def create_mixdowns(folder: Path, make_learning: bool = True, make_practice: boo
 
     # Exclude any existing mixdown files
     stems = [s for s in stems if not any(
-        tag in s.name for tag in ["_learning", "_practice", "_mix"]
+        tag in s.name.lower() for tag in ["_learning", "_practice", "_mix"]
     )]
 
     if not stems:
@@ -237,12 +237,12 @@ def create_mixdowns(folder: Path, make_learning: bool = True, make_practice: boo
     success = True
 
     if make_learning:
-        out = folder / f"{folder.name}_learning.mp3"
+        out = folder / f"{folder.name}_Learning.mp3"
         print(f"\nMix A — Learning (keys +{KEYS_LEARNING_DB}dB):")
         success &= mix_stems(stems, KEYS_LEARNING_DB, out, keys_set=keys_set)
 
     if make_practice:
-        out = folder / f"{folder.name}_practice.mp3"
+        out = folder / f"{folder.name}_Practice.mp3"
         print(f"\nMix B — Practice (keys muted):")
         success &= mix_stems(stems, KEYS_PRACTICE_DB, out, keys_set=keys_set)
 

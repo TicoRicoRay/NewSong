@@ -94,7 +94,7 @@ def main():
         print(f"Skipping KV download — using existing files in {stems_dir}")
         existing = sorted(Path(stems_dir).glob("*.mp3"))
         existing = [s for s in existing if not any(
-            tag in s.name for tag in ["_learning", "_practice", "_mix"]
+            tag in s.name.lower() for tag in ["_learning", "_practice", "_mix"]
         )]
         stem_names = [s.stem for s in existing]  # strip .mp3
         stem_info  = None
@@ -149,8 +149,8 @@ def main():
     # Step 4: Upload mixdowns to BandHelper
     print()
     print("Uploading mixdowns to BandHelper...")
-    learning_mp3 = Path(stems_dir) / f"{folder}_learning.mp3"
-    practice_mp3 = Path(stems_dir) / f"{folder}_practice.mp3"
+    learning_mp3 = Path(stems_dir) / f"{folder}_Learning.mp3"
+    practice_mp3 = Path(stems_dir) / f"{folder}_Practice.mp3"
 
     if not learning_mp3.exists() or not practice_mp3.exists():
         print("WARNING: Mixdown files not found — skipping BandHelper upload", file=sys.stderr)
