@@ -56,6 +56,7 @@ def main():
     p.add_argument("--url",           help="Direct KV song URL (skips search)")
     p.add_argument("--key",           help="Target key to transpose to (e.g. A, Bb, F#)")
     p.add_argument("--skip-download", action="store_true", help="Skip KV download (use existing stems)")
+    p.add_argument("--skip-chords",   action="store_true", help="Skip UG chord fetch + BandHelper upload")
     args = p.parse_args()
 
     args.artist, args.song = parse_song_arg(args)
@@ -74,6 +75,26 @@ def main():
     print()
 
     from mixdown import classify_stem
+
+    # Step 0: Fetch chords from UG + upload to BandHelper Personal Lyrics
+    # SAFETY: upload_lyrics never overwrites if field already has content
+    if not args.skip_chords:
+        print("Fetching chords from Ultimate Guitar...")
+        try:
+            from ug_fetch import fetch_chord_sheet
+            chord_sheet = fetch_chord_sheet(artist=args.artist, song=args.song)
+            if chord_sheet:
+                from bandhelper import upload_lyrics
+                asyncio.run(upload_lyrics(
+                    song_title=args.song,
+                    content=chord_sheet,
+                    account="", username="", password="",
+                ))
+            else:
+                print("  No chords found — skipping Personal Lyrics upload.")
+        except Exception as e:
+            print(f"  Chords step failed ({e}) — continuing.", file=sys.stderr)
+        print()
 
     # Step 1a: Show stems + ask about keys BEFORE any slow work
     if not args.skip_download:
