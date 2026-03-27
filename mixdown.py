@@ -113,20 +113,27 @@ def check_ffmpeg() -> str:
     return find_ffmpeg()
 
 
-def mix_stems(stems: list[Path], keys_db: float | None, output_path: Path):
+def mix_stems(stems: list[Path], keys_db: float | None, output_path: Path,
+              keys_set: set = None):
     """
     Mix stems using ffmpeg amix filter.
-    keys_db: float = volume adjustment in dB, None = mute keys entirely.
+    keys_db:  float = volume adjustment in dB, None = mute keys entirely.
+    keys_set: set of Path objects pre-identified as keys (overrides classify_stem).
     """
     import subprocess
     import tempfile
 
     ffmpeg = find_ffmpeg()
 
+    def is_keys(stem: Path) -> bool:
+        if keys_set is not None:
+            return stem in keys_set
+        return classify_stem(stem.name) == 'keys'
+
     # Build input list — exclude keys entirely for practice mix
     active_stems = []
     for stem in sorted(stems):
-        role = classify_stem(stem.name)
+        role = 'keys' if is_keys(stem) else 'other'
         if role == 'keys' and keys_db is None:
             print(f"  Excluding (muted): {stem.name}")
             continue
@@ -183,8 +190,13 @@ def mix_stems(stems: list[Path], keys_db: float | None, output_path: Path):
     return True
 
 
-def create_mixdowns(folder: Path, make_learning: bool = True, make_practice: bool = True, auto_confirm: bool = False):
-    """Create learning and/or practice mixdowns from a stems folder."""
+def create_mixdowns(folder: Path, make_learning: bool = True, make_practice: bool = True,
+                    auto_confirm: bool = False, confirmed_keys: list = None):
+    """
+    Create learning and/or practice mixdowns from a stems folder.
+    confirmed_keys: list of stem name strings (without path/extension) pre-confirmed
+                    as keys by the user upfront in stems.py. If provided, skips prompt.
+    """
     stems = sorted(folder.glob("*.mp3"))
 
     # Exclude any existing mixdown files
@@ -196,33 +208,43 @@ def create_mixdowns(folder: Path, make_learning: bool = True, make_practice: boo
         print(f"ERROR: No .mp3 stems found in {folder}", file=sys.stderr)
         return False
 
-    print_classification(stems)
+    # If confirmed_keys provided, override auto-classification
+    if confirmed_keys is not None:
+        # Match by stem name fragment (case-insensitive)
+        def is_confirmed_key(stem_path: Path) -> bool:
+            name = stem_path.stem.lower()  # strip .mp3, lowercase
+            return any(k.lower() in name or name in k.lower() for k in confirmed_keys)
+        keys_stems = [s for s in stems if is_confirmed_key(s)]
+        print(f"Keys stems (confirmed): {[s.name for s in keys_stems]}")
+    else:
+        print_classification(stems)
+        keys_stems = [s for s in stems if classify_stem(s.name) == 'keys']
+        print(f"Keys stems ({len(keys_stems)}): {[s.name for s in keys_stems]}")
+        print()
 
-    keys_stems = [s for s in stems if classify_stem(s.name) == 'keys']
-    print(f"Keys stems ({len(keys_stems)}): {[s.name for s in keys_stems]}")
+        # Confirm with user unless auto_confirm
+        if not auto_confirm:
+            answer = input("Classifications look correct? (y/n): ").strip().lower()
+            if answer == 'n':
+                print("Aborting. Edit KEYS_KEYWORDS in mixdown.py to adjust classification.")
+                return False
+
     print()
 
-    # Confirm with user unless auto_confirm
-    if auto_confirm:
-        print("Auto-confirmed.")
-    else:
-        answer = input("Classifications look correct? (y/n/edit): ").strip().lower()
-        if answer == 'n':
-            print("Aborting. Edit KEYS_KEYWORDS in mixdown.py to adjust classification.")
-            return False
-    # 'edit' could be a future interactive mode — for now treat same as y
+    # Build keys_set for mix_stems (set of Path objects)
+    keys_set = set(keys_stems) if keys_stems else None
 
     success = True
 
     if make_learning:
         out = folder / f"{folder.name}_learning.mp3"
         print(f"\nMix A — Learning (keys +{KEYS_LEARNING_DB}dB):")
-        success &= mix_stems(stems, KEYS_LEARNING_DB, out)
+        success &= mix_stems(stems, KEYS_LEARNING_DB, out, keys_set=keys_set)
 
     if make_practice:
         out = folder / f"{folder.name}_practice.mp3"
         print(f"\nMix B — Practice (keys muted):")
-        success &= mix_stems(stems, KEYS_PRACTICE_DB, out)
+        success &= mix_stems(stems, KEYS_PRACTICE_DB, out, keys_set=keys_set)
 
     return success
 

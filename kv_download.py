@@ -277,6 +277,62 @@ async def download_stem(page, song_url: str, stem_index: int, stem_name: str,
     return None
 
 
+async def get_stem_list(artist: str, song: str, song_url: str = None, target_key: str = None) -> dict:
+    """
+    Login to KV, find the song, return stem names WITHOUT downloading anything.
+    Returns dict with keys: song_url, track_names, pitch, display_artist, folder
+    Used by stems.py to show stems and ask about keys BEFORE the slow download.
+    """
+    display_artist, search_artist, folder_artist = normalize_artist(artist)
+    folder = build_dropbox_folder_name(display_artist, song)
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=False)
+        context = await browser.new_context(accept_downloads=True)
+        page    = await context.new_page()
+
+        print("Logging in to Karaoke-Version...")
+        if not await login(page, KV_EMAIL, KV_PASSWORD):
+            await browser.close()
+            return {}
+
+        if not song_url:
+            query  = f"{search_artist} {song}".replace(" ", "+")
+            search = f"https://www.karaoke-version.com/custombackingtrack/search.html?navcat=1&query={query}"
+            await page.goto(search, wait_until="domcontentloaded")
+            await page.wait_for_timeout(2000)
+            link = page.locator("a.song__name[href*='/custombackingtrack/']").first
+            href = await link.get_attribute("href", timeout=5000)
+            if not href:
+                print("ERROR: Song not found.", file=sys.stderr)
+                await browser.close()
+                return {}
+            song_url = "https://www.karaoke-version.com" + href if href.startswith("/") else href
+            print(f"Found: {song_url}")
+
+        song_url = song_url.split("?")[0]
+        await page.goto(song_url, wait_until="domcontentloaded")
+        await page.wait_for_timeout(3000)
+
+        pitch = 0
+        if target_key:
+            original_key = await get_original_key(page)
+            if original_key:
+                pitch = semitone_offset(original_key, target_key)
+                print(f"Key: {original_key} → {target_key} ({pitch:+d} semitones)")
+
+        track_names = await get_track_names(page)
+        await browser.close()
+
+    return {
+        "song_url":      song_url,
+        "track_names":   track_names,
+        "pitch":         pitch,
+        "display_artist": display_artist,
+        "folder":        folder,
+    }
+
+
 async def download_all_stems(artist: str, song: str, song_url: str = None, target_key: str = None) -> list[str]:
     # Normalize artist name for display, KV search, and folder naming
     display_artist, search_artist, folder_artist = normalize_artist(artist)
