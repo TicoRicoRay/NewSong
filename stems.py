@@ -96,8 +96,46 @@ def main():
     from mixdown import create_mixdowns
     create_mixdowns(Path(stems_dir), make_learning=True, make_practice=True, auto_confirm=True)
 
+    # Step 4: Upload mixdowns to BandHelper
     print()
-    print("Done — stems + mixdowns complete.")
+    print("Uploading mixdowns to BandHelper...")
+    learning_mp3 = Path(stems_dir) / f"{folder}_learning.mp3"
+    practice_mp3 = Path(stems_dir) / f"{folder}_practice.mp3"
+
+    if not learning_mp3.exists() or not practice_mp3.exists():
+        print("WARNING: Mixdown files not found — skipping BandHelper upload", file=sys.stderr)
+    else:
+        from bandhelper import login, find_song, upload_recording
+        from config import BH_ACCOUNT, BH_USERNAME, BH_PASSWORD
+        from playwright.async_api import async_playwright
+
+        async def run_upload():
+            async with async_playwright() as pw:
+                browser = await pw.chromium.launch(headless=False)
+                page    = await browser.new_page()
+                if not await login(page, BH_ACCOUNT, BH_USERNAME, BH_PASSWORD):
+                    await browser.close()
+                    return
+                song_url = await find_song(page, args.song)
+                if not song_url:
+                    await browser.close()
+                    return
+                if "song_edit" not in song_url:
+                    import re
+                    song_id = re.search(r'ID=([^&]+)', song_url)
+                    if song_id:
+                        from bandhelper import BH_EDIT_URL
+                        song_url = f"{BH_EDIT_URL}?ID={song_id.group(1)}"
+                await page.goto(song_url, wait_until="domcontentloaded")
+                await page.wait_for_timeout(3000)
+                await upload_recording(page, str(learning_mp3), f"{args.song} - Learning")
+                await upload_recording(page, str(practice_mp3), f"{args.song} - Practice")
+                await browser.close()
+
+        asyncio.run(run_upload())
+
+    print()
+    print("Done — stems + mixdowns + BandHelper upload complete.")
 
 
 if __name__ == "__main__":
