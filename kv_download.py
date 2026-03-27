@@ -416,8 +416,9 @@ async def download_all_stems(artist: str, song: str, song_url: str = None, targe
         for i, name in stems_to_dl:
             print(f"  [{i}] {name}")
 
-        est = len(stems_to_dl) * 75
-        print(f"\nEstimated time: {est // 60}-{(est + len(stems_to_dl)*15) // 60} minutes\n")
+        low = len(stems_to_dl) * 2
+        high = len(stems_to_dl) * 2 + len(stems_to_dl) // 2  # +30s per track for high end
+        print(f"\nEstimated time: {low}-{high} minutes (some songs take longer)\n")
 
         for n, (idx, name) in enumerate(stems_to_dl, 1):
             print(f"[{n}/{len(stems_to_dl)}] {name}")
