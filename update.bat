@@ -13,7 +13,8 @@ if exist "%DEST%\config.py" (
 :: Pull latest from GitHub
 cd /d "%DEST%"
 git config pull.rebase false
-git pull --no-edit origin main
+git fetch origin main
+git reset --hard origin/main
 
 :: Restore config.py (git pull must not overwrite credentials)
 if exist "%TEMP_CONFIG%" (

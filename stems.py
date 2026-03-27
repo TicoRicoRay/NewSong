@@ -104,7 +104,7 @@ def main():
     print("Stems found:")
     for name in stem_names:
         role   = classify_stem(name)
-        marker = "  [KEYS]" if role == 'keys' else ""
+        marker = "  \U0001F3B9" if role == 'keys' else ""
         print(f"  {name}{marker}")
 
     keys_detected = [name for name in stem_names if classify_stem(name) == 'keys']
