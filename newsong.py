@@ -209,7 +209,7 @@ def main():
     if not learning_mp3.exists() or not practice_mp3.exists():
         print("WARNING: Mixdown files not found — skipping BandHelper upload", file=sys.stderr)
     else:
-        from bandhelper import login, find_song, upload_recording, midi_preset_exists, add_midi_preset, BH_EDIT_URL
+        from bandhelper import login, find_song, upload_recording, add_midi_preset, BH_EDIT_URL
         from config import BH_ACCOUNT, BH_USERNAME, BH_PASSWORD
         from playwright.async_api import async_playwright
         import re
@@ -236,12 +236,11 @@ def main():
                 await upload_recording(page, str(learning_mp3), f"{args.song} - Learning")
                 await upload_recording(page, str(practice_mp3), f"{args.song} - Practice")
 
-                # Create MIDI preset if one doesn't already exist for this song
-                print(f"  Checking for MIDI preset: {args.song}")
-                if not await midi_preset_exists(page, args.song):
-                    await add_midi_preset(page, args.song)
-                else:
-                    print(f"  MIDI preset already exists — skipping.")
+                # Reload page for clean state after recording uploads
+                await page.goto(song_url, wait_until="domcontentloaded")
+                await page.wait_for_timeout(3000)
+                # Create MIDI preset (name only, Ray only)
+                await add_midi_preset(page, args.song)
 
                 await browser.close()
 
