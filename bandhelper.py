@@ -381,7 +381,7 @@ async def add_midi_preset(page, preset_name: str) -> bool:
     """)
     await page.wait_for_timeout(300)
 
-    # Click Save
+    # Save #1 — saves the new preset and returns to the checklist modal
     saved = await page.evaluate("""
         () => {
             const all = [...document.querySelectorAll('a, button')]
@@ -392,11 +392,28 @@ async def add_midi_preset(page, preset_name: str) -> bool:
         }
     """)
     if not saved:
-        print("  ERROR: Save button not found", file=sys.stderr)
+        print("  ERROR: Save button not found (step 1)", file=sys.stderr)
         return False
 
-    await page.wait_for_timeout(3000)
-    print(f"  MIDI preset created: {preset_name}")
+    # Wait for checklist modal to reappear with preset auto-checked
+    await page.wait_for_timeout(2000)
+
+    # Save #2 — attaches the checked preset to the song
+    saved2 = await page.evaluate("""
+        () => {
+            const all = [...document.querySelectorAll('a, button')]
+                .filter(el => el.offsetParent !== null);
+            const save = all.find(el => el.textContent.trim() === 'Save');
+            if (save) { save.click(); return true; }
+            return false;
+        }
+    """)
+    if not saved2:
+        print("  ERROR: Save button not found (step 2 - attach)", file=sys.stderr)
+        return False
+
+    await page.wait_for_timeout(2000)
+    print(f"  MIDI preset created and attached: {preset_name}")
     return True
 
 
